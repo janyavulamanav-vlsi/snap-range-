@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SnapRange</title>
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<style>
+:root{--bg:#eef2f0;--ink:#14231d;--mute:#5b6b64;--card:#fff;--line:#cfd9d4;--accent:#0f7a5a;--accent-ink:#fff;--err:#b3261e}
+@media(prefers-color-scheme:dark){:root{--bg:#0e1714;--ink:#e6f0ec;--mute:#8fa399;--card:#16231f;--line:#2a3b35;--accent:#3ed6a0;--accent-ink:#06150f;--err:#ff8a80}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Georgia,"Times New Roman",serif;min-height:100vh;display:flex;justify-content:center;padding:48px 16px}
+main{width:100%;max-width:560px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.25rem;margin-bottom:28px}.brand svg{width:40px;height:40px}
+h1{font-size:2.6rem;line-height:1.05;margin:0 0 8px;letter-spacing:-.02em}
+p.sub{color:var(--mute);margin:0 0 28px}
+.row{display:flex;gap:8px}
+input,select,button{font:inherit;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:12px 14px}
+input{flex:1;min-width:0}
+button{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);cursor:pointer;font-weight:600}
+button:disabled{opacity:.5;cursor:wait}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+#panel{display:none;margin-top:20px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+.head{display:flex;gap:12px;align-items:center;margin-bottom:16px}
+.head img{width:112px;aspect-ratio:16/9;object-fit:cover;border-radius:8px;background:var(--line)}
+.head b{display:block;line-height:1.25}
+.head span{color:var(--mute);font-size:.9rem}
+.seg{display:flex;gap:8px;margin-bottom:12px}
+.seg label{flex:1;text-align:center;border:1px solid var(--line);border-radius:10px;padding:10px;cursor:pointer}
+.seg input{display:none}
+.seg label:has(input:checked){border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.times{display:none;gap:8px;margin-bottom:12px}
+.times label{flex:1;font-size:.85rem;color:var(--mute)}
+.times input{width:100%;margin-top:4px;color:var(--ink)}
+.opts{display:flex;gap:8px;margin-bottom:16px}
+.opts select{flex:1}
+#go{width:100%}
+#msg{margin-top:12px;min-height:1.4em;color:var(--mute)}
+#msg.err{color:var(--err)}
+small{display:block;margin-top:28px;color:var(--mute);font-size:.82rem}
+</style>
+</head>
+<body>
+<main>
+  <div class="brand"><svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="64" height="64" rx="16" fill="#0f7a5a"/><path d="M26 18l17 10-17 10z" fill="#fff"/><rect x="12" y="46" width="40" height="5" rx="2.5" fill="#fff" opacity=".35"/><rect x="20" y="46" width="24" height="5" rx="2.5" fill="#fff"/><rect x="17" y="42" width="6" height="13" rx="3" fill="#fff"/><rect x="41" y="42" width="6" height="13" rx="3" fill="#fff"/></svg><span>SnapRange</span></div>
+  <h1>Paste a link.<br>Get the video.</h1>
+  <p class="sub">Works with YouTube, Instagram, X, Reddit, TikTok and most other sites.</p>
+  <div class="row">
+    <input id="url" type="url" placeholder="https://..." aria-label="Video link">
+    <button id="fetch">Check link</button>
+  </div>
+  <div id="msg" role="status"></div>
+
+  <section id="panel">
+    <div class="head"><img id="thumb" alt=""><div><b id="title"></b><span id="meta"></span></div></div>
+    <div class="seg">
+      <label><input type="radio" name="mode" value="full" checked> Whole video</label>
+      <label><input type="radio" name="mode" value="clip"> Just a clip</label>
+    </div>
+    <div class="times" id="times">
+      <label>Start (mm:ss)<input id="start" value="0:00"></label>
+      <label>End (mm:ss)<input id="end" value="0:30"></label>
+    </div>
+    <div class="opts">
+      <select id="kind" aria-label="Type"><option value="video">Video (MP4)</option><option value="audio">Audio only (MP3)</option></select>
+      <select id="height" aria-label="Quality"><option value="1080">1080p</option><option value="720" selected>720p</option><option value="480">480p</option><option value="360">360p</option></select>
+    </div>
+    <button id="go">Download</button>
+  </section>
+  <small>Only download content you own or have permission to use. Saving other people's videos can break the platform's terms and copyright law.</small>
+</main>
+<script>
+const API=''; // set to your backend URL, e.g. 'https://snaprange-api.onrender.com'
+const $=id=>document.getElementById(id);
+const msg=(t,e)=>{$('msg').textContent=t;$('msg').className=e?'err':''};
+const fmt=s=>{s=Math.round(s);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
+const parse=t=>{const p=t.split(':').map(Number).reverse();return p.reduce((a,v,i)=>a+(v||0)*60**i,0)};
+let duration=0;
+document.querySelectorAll('input[name=mode]').forEach(r=>r.onchange=()=>{
+  $('times').style.display=document.querySelector('input[name=mode]:checked').value==='clip'?'flex':'none'});
+$('fetch').onclick=async()=>{
+  const url=$('url').value.trim(); if(!url) return msg('Paste a link first.',1);
+  $('fetch').disabled=true; msg('Checking link...'); $('panel').style.display='none';
+  try{
+    const r=await fetch(API+'/api/info',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
+    const d=await r.json(); if(!r.ok) throw new Error(d.error);
+    duration=d.duration; $('thumb').src=d.thumbnail||''; $('title').textContent=d.title;
+    $('meta').textContent=[d.site,duration?fmt(duration):''].filter(Boolean).join(', ');
+    $('end').value=fmt(Math.min(30,duration||30)); $('panel').style.display='block'; msg('');
+  }catch(e){msg(e.message||'Something went wrong.',1)}
+  $('fetch').disabled=false;
+};
+$('go').onclick=()=>{
+  const clip=document.querySelector('input[name=mode]:checked').value==='clip';
+  const s=clip?parse($('start').value):0, e=clip?parse($('end').value):0;
+  if(clip&&(e<=s||(duration&&s>=duration))) return msg('End time must be after start time.',1);
+  const q=new URLSearchParams({url:$('url').value.trim(),start:s,end:e,kind:$('kind').value,height:$('height').value});
+  msg('Preparing your file. Clips and long videos can take a minute.');
+  window.location=API+'/api/download?'+q;
+};
+$('url').addEventListener('keydown',e=>{if(e.key==='Enter')$('fetch').click()});
+</script>
+</body>
+</html>
